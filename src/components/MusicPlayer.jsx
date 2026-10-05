@@ -1,112 +1,64 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Play, Pause, Music, Disc } from 'lucide-react';
+import { Volume2, VolumeX, Play, Pause } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+
+const SONG = {
+  src: '/audio/Sal Priadi - Besok Kita Pergi Makan (Official Audio) - (320 Kbps).mp3',
+  title: 'Besok Kita Pergi Makan',
+  artist: 'Sal Priadi',
+};
 
 export default function MusicPlayer() {
   const { isPlayingMusic, setIsPlayingMusic } = useApp();
-  const [volume, setVolume] = useState(0.4);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [currentSongTitle, setCurrentSongTitle] = useState('Our Cinematic Theme (Acoustic)');
-  const audioCtxRef = useRef(null);
-  const gainNodeRef = useRef(null);
-  const intervalRef = useRef(null);
+  const [volume, setVolume] = useState(0.5);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef(null);
 
-  // Web Audio romantic ambient generator
+  // Create audio element once
   useEffect(() => {
-    if (!isPlayingMusic) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (audioCtxRef.current && audioCtxRef.current.state === 'running') {
-        audioCtxRef.current.suspend();
-      }
-      return;
-    }
-
-    // Initialize Web Audio
-    if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      audioCtxRef.current = new AudioCtx();
-      const gainNode = audioCtxRef.current.createGain();
-      gainNode.gain.setValueAtTime(volume, audioCtxRef.current.currentTime);
-      gainNode.connect(audioCtxRef.current.destination);
-      gainNodeRef.current = gainNode;
-    } else if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
-    }
-
-    // Play smooth romantic chord progression (Cmaj9 -> Am9 -> Fmaj7 -> Gsus4)
-    const chords = [
-      [261.63, 329.63, 392.00, 493.88, 587.33], // Cmaj9
-      [220.00, 261.63, 329.63, 392.00, 493.88], // Am9
-      [174.61, 220.00, 261.63, 329.63, 392.00], // Fmaj7
-      [196.00, 261.63, 293.66, 392.00, 440.00]  // Gsus4 add9
-    ];
-
-    let chordIdx = 0;
-
-    const playChord = () => {
-      if (!audioCtxRef.current || audioCtxRef.current.state !== 'running') return;
-      const ctx = audioCtxRef.current;
-      const now = ctx.currentTime;
-      const chord = chords[chordIdx % chords.length];
-      chordIdx++;
-
-      chord.forEach((freq, noteIdx) => {
-        const osc = ctx.createOscillator();
-        const noteGain = ctx.createGain();
-
-        // Soft warm triangle/sine blend
-        osc.type = noteIdx % 2 === 0 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq, now + noteIdx * 0.12);
-
-        // Slow soft attack and long decay
-        const start = now + noteIdx * 0.12;
-        noteGain.gain.setValueAtTime(0.0001, start);
-        noteGain.gain.exponentialRampToValueAtTime(0.08 / chord.length, start + 1.2);
-        noteGain.gain.exponentialRampToValueAtTime(0.0001, start + 4.5);
-
-        osc.connect(noteGain);
-        noteGain.connect(gainNodeRef.current);
-
-        osc.start(start);
-        osc.stop(start + 4.8);
-      });
-    };
-
-    playChord();
-    intervalRef.current = setInterval(playChord, 4800);
+    const audio = new Audio(SONG.src);
+    audio.loop = true;
+    audio.volume = volume;
+    audioRef.current = audio;
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      audio.pause();
+      audio.src = '';
     };
+  }, []);
+
+  // Play / pause
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlayingMusic) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
   }, [isPlayingMusic]);
 
-  // Adjust volume
+  // Volume
   useEffect(() => {
-    if (gainNodeRef.current && audioCtxRef.current) {
-      gainNodeRef.current.gain.setValueAtTime(volume, audioCtxRef.current.currentTime);
-    }
-  }, [volume]);
+    if (!audioRef.current) return;
+    audioRef.current.volume = isMuted ? 0 : volume;
+  }, [volume, isMuted]);
 
-  const togglePlay = () => {
-    setIsPlayingMusic(prev => !prev);
-  };
+  const togglePlay = () => setIsPlayingMusic(prev => !prev);
+  const toggleMute = () => setIsMuted(m => !m);
 
   return (
     <div className="fixed bottom-5 right-5 z-40">
-      <div 
-        className={`flex items-center gap-3 px-3 py-2 rounded-full glass-panel border border-white/10 text-white shadow-2xl transition-all duration-300 ${
-          isExpanded ? 'pr-4 bg-[#121217]/95' : 'bg-[#121217]/80 hover:bg-[#121217]/95'
-        }`}
-      >
-        {/* Vinyl / Disc icon with spinning animation when playing */}
+      <div className="flex items-center gap-3 px-3 py-2 rounded-full bg-[#121217]/90 border border-white/10 text-white shadow-2xl backdrop-blur-md transition-all duration-300">
+
+        {/* Play / Pause */}
         <button
           onClick={togglePlay}
           className={`relative p-2 rounded-full flex items-center justify-center transition-all ${
-            isPlayingMusic 
-              ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' 
+            isPlayingMusic
+              ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
               : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/20'
           }`}
-          title={isPlayingMusic ? "Pause Music" : "Play Romantic Soundtrack"}
+          title={isPlayingMusic ? 'Pause' : 'Play'}
         >
           {isPlayingMusic ? (
             <Pause className="w-4 h-4" />
@@ -115,38 +67,43 @@ export default function MusicPlayer() {
           )}
         </button>
 
-        {/* Mini track info */}
-        <div 
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="cursor-pointer select-none text-left"
-        >
+        {/* Track info */}
+        <div className="select-none text-left">
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            <span className={`w-1.5 h-1.5 rounded-full bg-red-500 ${isPlayingMusic ? 'animate-pulse' : 'opacity-30'}`} />
             <span className="text-[10px] tracking-wider uppercase font-semibold text-zinc-400">
               OUR SOUNDTRACK
             </span>
           </div>
-          <p className="text-xs font-medium text-white/90 truncate max-w-[140px] sm:max-w-[180px]">
-            {isPlayingMusic ? '♪ Playing: Our Cinematic Theme' : '♪ Click play for ambient music'}
+          <p className="text-xs font-medium text-white/90 truncate max-w-[150px] sm:max-w-[200px]">
+            {isPlayingMusic
+              ? `♪ ${SONG.artist} — ${SONG.title}`
+              : `♪ ${SONG.artist} — ${SONG.title}`}
           </p>
         </div>
 
-        {/* Volume & Details Toggle */}
+        {/* Volume controls */}
         <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-white/10">
           <button
-            onClick={() => setVolume(v => v === 0 ? 0.4 : 0)}
+            onClick={toggleMute}
             className="text-zinc-400 hover:text-white transition-colors"
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
-            {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            {isMuted || volume === 0
+              ? <VolumeX className="w-4 h-4" />
+              : <Volume2 className="w-4 h-4" />}
           </button>
-          
+
           <input
             type="range"
             min="0"
             max="1"
             step="0.05"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            value={isMuted ? 0 : volume}
+            onChange={(e) => {
+              setVolume(parseFloat(e.target.value));
+              if (isMuted) setIsMuted(false);
+            }}
             className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-red-600"
             title={`Volume: ${Math.round(volume * 100)}%`}
           />
